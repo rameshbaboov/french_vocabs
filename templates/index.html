@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="section">
+    <h2>Configuration</h2>
+    <form method="post" action="/config">
+        <h3>Words generator (generate_words.py)</h3>
+        <div class="row">
+            <label for="words_level">Level</label>
+            <select id="words_level" name="words_level">
+                {% for lvl in ["A1", "A2", "B1", "B2"] %}
+                    <option value="{{ lvl }}" {% if config.words_level == lvl %}selected{% endif %}>{{ lvl }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="row">
+            <label for="words_model">Model</label>
+            <input id="words_model" name="words_model" type="text" value="{{ config.words_model }}">
+        </div>
+        <div class="row">
+            <label for="words_batch_size">Batch size</label>
+            <input id="words_batch_size" name="words_batch_size" type="number"
+                   value="{{ config.words_batch_size }}">
+        </div>
+        <div class="row">
+            <label for="words_outdir">Output dir</label>
+            <input id="words_outdir" name="words_outdir" type="text" value="{{ config.words_outdir }}">
+        </div>
+
+        <h3>Sentences generator (generate_sentences.py)</h3>
+        <div class="row">
+            <label for="sent_level">Level</label>
+            <select id="sent_level" name="sent_level">
+                {% for lvl in ["A1", "A2", "B1", "B2"] %}
+                    <option value="{{ lvl }}" {% if config.sent_level == lvl %}selected{% endif %}>{{ lvl }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="row">
+            <label for="sent_model">Model</label>
+            <input id="sent_model" name="sent_model" type="text" value="{{ config.sent_model }}">
+        </div>
+        <div class="row">
+            <label for="sent_input_dir">Input dir</label>
+            <input id="sent_input_dir" name="sent_input_dir" type="text" value="{{ config.sent_input_dir }}">
+        </div>
+        <div class="row">
+            <label for="sent_output_dir">Output dir</label>
+            <input id="sent_output_dir" name="sent_output_dir" type="text" value="{{ config.sent_output_dir }}">
+        </div>
+
+        <h3>Ollama</h3>
+        <div class="row">
+            <label for="ollama_model_name">Model name</label>
+            <input id="ollama_model_name" name="ollama_model_name" type="text"
+                   value="{{ config.ollama_model_name }}">
+        </div>
+
+        <button class="btn btn-primary" type="submit">Save config</button>
+    </form>
+</div>
+
+<div class="section">
+    <h2>Job control</h2>
+    <div class="inline-forms">
+        <form method="post" action="/run">
+            <input type="hidden" name="job_type" value="words">
+            <button class="btn btn-primary" type="submit">Run words job</button>
+        </form>
+        <form method="post" action="/run">
+            <input type="hidden" name="job_type" value="sentences">
+            <button class="btn btn-primary" type="submit">Run sentences job</button>
+        </form>
+        <form method="post" action="/stop">
+            <button class="btn btn-danger" type="submit">Stop job</button>
+        </form>
+    </div>
+    <p>
+        Current job:
+        {% if current_job %}
+            <strong>{{ current_job.job_type }}</strong> ({{ current_job.id }})
+        {% else %}
+            <strong>None</strong>
+        {% endif %}
+    </p>
+
+    <h3>Ollama control</h3>
+    <div class="inline-forms">
+        <form method="post" action="/ollama/stop-model">
+            <button class="btn btn-secondary" type="submit">
+                Offload model (ollama stop {{ config.ollama_model_name }})
+            </button>
+        </form>
+        <form method="post" action="/ollama/restart">
+            <button class="btn btn-secondary" type="submit">
+                Restart Ollama
+            </button>
+        </form>
+    </div>
+
+    <h3>Live log</h3>
+    <p><small>Auto-refreshes every 60 seconds.</small></p>
+    <div>
+        <strong>Status:</strong> <span id="job-status">Unknown</span>
+    </div>
+    <pre id="log-text"></pre>
+</div>
+
+<div class="section">
+    <h2>Output files</h2>
+
+    <h3>Words (.txt) – {{ config.words_outdir }}</h3>
+    {% if words_files %}
+        <table>
+            <thead>
+            <tr>
+                <th>File</th>
+                <th>Size (KB)</th>
+                <th>Modified</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for f in words_files %}
+                <tr>
+                    <td>{{ f.name }}</td>
+                    <td>{{ f.size_kb }}</td>
+                    <td>{{ f.mtime.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                    <td>
+                        <a href="/preview?type=words&path={{ f.rel_path | urlencode }}" target="_blank">Preview</a> |
+                        <a href="/download?type=words&path={{ f.rel_path | urlencode }}">Download</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p><em>No word files found.</em></p>
+    {% endif %}
+
+    <h3>Sentences (.docx) – {{ config.sent_output_dir }}</h3>
+    {% if sent_files %}
+        <table>
+            <thead>
+            <tr>
+                <th>File</th>
+                <th>Size (KB)</th>
+                <th>Modified</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for f in sent_files %}
+                <tr>
+                    <td>{{ f.name }}</td>
+                    <td>{{ f.size_kb }}</td>
+                    <td>{{ f.mtime.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                    <td>
+                        <a href="/preview?type=sentences&path={{ f.rel_path | urlencode }}" target="_blank">Preview</a> |
+                        <a href="/download?type=sentences&path={{ f.rel_path | urlencode }}">Download</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p><em>No sentence files found.</em></p>
+    {% endif %}
+</div>
+
+<script>
+async function refreshLog() {
+    try {
+        const res = await fetch("/logs/current");
+        if (!res.ok) return;
+        const data = await res.json();
+        const statusEl = document.getElementById("job-status");
+        const logEl = document.getElementById("log-text");
+        if (data.running) {
+            statusEl.textContent = "Running (" + data.job_type + ", " + data.job_id + ")";
+        } else {
+            statusEl.textContent = "Idle";
+        }
+        logEl.textContent = data.log || "";
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+window.addEventListener("load", function () {
+    refreshLog();
+    setInterval(refreshLog, 60000);
+});
+</script>
+
+{% endblock %}
